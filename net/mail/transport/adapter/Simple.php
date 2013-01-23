@@ -97,8 +97,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 			$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
 			$headers['Content-Type'] = $contentType;
 			$contentType .= ";charset=\"{$charset}\"";
-			$wrap = "Content-Type: {$contentType}\n\n";
-			$wrap .= "--{$boundary}\n";
+			$wrap = "--{$boundary}\n";
 			$wrap .= $body . "\n";
 			foreach ($attachments as $attachment) {
 				if (isset($attachment['path'])) {
@@ -145,7 +144,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 			$wrap .= "--{$boundary}--";
 			$body = $wrap;
 		}
-
+		$headers = array_filter($headers);
 		$headers = join("\r\n", array_map(function($name, $value) {
 			return "{$name}: {$value}";
 		}, array_keys($headers), $headers));
