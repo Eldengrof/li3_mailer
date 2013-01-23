@@ -73,22 +73,33 @@ class Simple extends \li3_mailer\net\mail\Transport {
 		$types = $message->types();
 		$attachments = $message->attachments();
 		$charset = $message->charset;
-		if (count($types) === 1 && count($attachments) === 0) {
+		if (count($types) === 1) {
 			$type = key($types);
 			$contentType = current($types);
 			$headers['Content-Type'] = "{$contentType};charset=\"{$charset}\"";
 			$body = wordwrap($message->body($type), 70);
-		} else {
+		}
+		else {
 			$boundary = uniqid('LI3_MAILER_SIMPLE_');
 			$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
 			$headers['Content-Type'] = $contentType;
-			$body = "This is a multi-part message in MIME format.\n\n";
+			$body = "Content-Type: {$contentType}\n\n";
 			foreach ($types as $type => $contentType) {
 				$body .= "--{$boundary}\n";
 				$contentType .= ";charset=\"{$charset}\"";
 				$body .= "Content-Type: {$contentType}\n\n";
-				$body .= wordwrap($message->body($type), 70) . "\n";
+				$body .= wordwrap($message->body($type), 70) . "\n\n";
 			}
+			$body .= "--{$boundary}--";
+		}
+		if (count($attachments) !== 0) {
+			$boundary = uniqid('LI3_MAILER_SIMPLE_');
+			$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
+			$headers['Content-Type'] = $contentType;
+			$contentType .= ";charset=\"{$charset}\"";
+			$wrap = "Content-Type: {$contentType}\n\n";
+			$wrap .= "--{$boundary}\n";
+			$wrap .= $body . "\n";
 			foreach ($attachments as $attachment) {
 				if (isset($attachment['path'])) {
 					$local = $attachment['path'][0] === '/';
@@ -104,9 +115,9 @@ class Simple extends \li3_mailer\net\mail\Transport {
 				} else {
 					$content = $attachment['data'];
 				}
-				$body .= "--{$boundary}\n";
+				$wrap .= "--{$boundary}\n";
 				if (isset($attachment['filename'])) {
-					$filename =  $attachment['filename'];
+					$filename = $attachment['filename'];
 				} else {
 					$filename = null;
 				}
@@ -115,7 +126,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 					if ($filename && !preg_match('/;\s+name=/', $contentType)) {
 						$contentType .= "; name=\"{$filename}\"";
 					}
-					$body .= "Content-Type: {$contentType}\n";
+					$wrap .= "Content-Type: {$contentType}\n";
 				}
 				if (isset($attachment['disposition'])) {
 					$disposition = $attachment['disposition'];
@@ -123,14 +134,16 @@ class Simple extends \li3_mailer\net\mail\Transport {
 					if ($filename && !preg_match($pattern, $disposition)) {
 						$disposition .= "; filename=\"{$filename}\"";
 					}
-					$body .= "Content-Disposition: {$disposition}\n";
+					$wrap .= "Content-Disposition: {$disposition}\n";
 				}
 				if (isset($attachment['id'])) {
-					$body .= "Content-ID: <{$attachment['id']}>\n";
+					$wrap .= "Content-ID: <{$attachment['id']}>\n";
 				}
-				$body .= "\n" . wordwrap($content, 70) . "\n";
+				$wrap .= "Content-Transfer-Encoding: base64\n";
+				$wrap .= "\n" . wordwrap(base64_encode($content), 70) . "\n";
 			}
-			$body .= "--{$boundary}--";
+			$wrap .= "--{$boundary}--";
+			$body = $wrap;
 		}
 
 		$headers = join("\r\n", array_map(function($name, $value) {
