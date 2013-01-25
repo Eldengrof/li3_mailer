@@ -73,26 +73,19 @@ class Simple extends \li3_mailer\net\mail\Transport {
 		$types = $message->types();
 		$attachments = $message->attachments();
 		$charset = $message->charset;
-		if (count($types) === 1) {
-			$type = key($types);
-			$contentType = current($types);
-			$headers['Content-Type'] = "{$contentType};charset=\"{$charset}\"";
-			$body = wordwrap($message->body($type), 70);
+
+		$boundary = uniqid('LI3_MAILER_SIMPLE_');
+		$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
+		$headers['Content-Type'] = $contentType;
+		$body = $attachments ? "Content-Type: {$contentType}\n\n" : '';
+		foreach ($types as $type => $contentType) {
+			$body .= "--{$boundary}\n";
+			$contentType .= ";charset=\"{$charset}\"";
+			$body .= "Content-Type: {$contentType}\n\n";
+			$body .= wordwrap($message->body($type), 70) . "\n\n";
 		}
-		else {
-			$boundary = uniqid('LI3_MAILER_SIMPLE_');
-			$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
-			$headers['Content-Type'] = $contentType;
-			$body = "Content-Type: {$contentType}\n\n";
-			foreach ($types as $type => $contentType) {
-				$body .= "--{$boundary}\n";
-				$contentType .= ";charset=\"{$charset}\"";
-				$body .= "Content-Type: {$contentType}\n\n";
-				$body .= wordwrap($message->body($type), 70) . "\n\n";
-			}
-			$body .= "--{$boundary}--";
-		}
-		if (count($attachments) !== 0) {
+		$body .= "--{$boundary}--";
+		if ($attachments) {
 			$boundary = uniqid('LI3_MAILER_SIMPLE_');
 			$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
 			$headers['Content-Type'] = $contentType;
@@ -100,34 +93,32 @@ class Simple extends \li3_mailer\net\mail\Transport {
 			$wrap = "--{$boundary}\n";
 			$wrap .= $body . "\n";
 			foreach ($attachments as $attachment) {
-				if (isset($attachment['path'])) {
-					$local = $attachment['path'][0] === '/';
-					if ($local && !is_readable($attachment['path'])) {
-						$content = false;
-					} else {
-						$content = file_get_contents($attachment['path']);
-					}
-					if ($content === false) {
-						$error = "Can not attach path `{$attachment['path']}`.";
-						throw new RuntimeException($error);
-					}
-				} else {
-					$content = $attachment['data'];
-				}
 				$wrap .= "--{$boundary}\n";
-				if (isset($attachment['filename'])) {
-					$filename = $attachment['filename'];
-				} else {
-					$filename = null;
+				$attachment += array (
+					'path' => null,
+					'data' => false,
+					'filename' => null,
+					'content-type' => 'text/plain',
+					'disposition' => null,
+					'id' => null,
+				);
+				$content = $attachment['data'];
+				if ($attachment['path']) {
+					$content = file_get_contents($attachment['path']);
 				}
-				if (isset($attachment['content-type'])) {
+				if ($content === false) {
+					$error = "Can not attach path `{$attachment['path']}`.";
+					throw new RuntimeException($error);
+				}
+				$filename = $attachment['filename'];
+				if ($attachment['content-type']) {
 					$contentType = $attachment['content-type'];
 					if ($filename && !preg_match('/;\s+name=/', $contentType)) {
 						$contentType .= "; name=\"{$filename}\"";
 					}
 					$wrap .= "Content-Type: {$contentType}\n";
 				}
-				if (isset($attachment['disposition'])) {
+				if ($attachment['disposition']) {
 					$disposition = $attachment['disposition'];
 					$pattern = '/;\s+filename=/';
 					if ($filename && !preg_match($pattern, $disposition)) {
@@ -135,7 +126,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 					}
 					$wrap .= "Content-Disposition: {$disposition}\n";
 				}
-				if (isset($attachment['id'])) {
+				if ($attachment['id']) {
 					$wrap .= "Content-ID: <{$attachment['id']}>\n";
 				}
 				$wrap .= "Content-Transfer-Encoding: base64\n";
@@ -145,11 +136,16 @@ class Simple extends \li3_mailer\net\mail\Transport {
 			$body = $wrap;
 		}
 		$headers = array_filter($headers);
-		$headers = join("\r\n", array_map(function($name, $value) {
-			return "{$name}: {$value}";
-		}, array_keys($headers), $headers));
+		$headers = join ("\r\n",
+			array_map (
+				function ($name, $value) {
+					return "{$name}: {$value}";
+				},
+				array_keys($headers),
+				$headers
+			)
+		);
 		$to = $this->_address($message->to);
-
 		$mail = $this->_dependencies['mail'];
 		return call_user_func($mail, $to, $message->subject, $body, $headers);
 	}
