@@ -119,10 +119,7 @@ class Media extends \lithium\core\StaticObject {
 				if (!isset($handlers[$type])) {
 					throw new MediaException("Unhandled media type `{$type}`.");
 				}
-				$handler = $options + $handlers[$type];
-				$handler += $defaults + array('type' => $type);
-				$filter = function($v) { return $v !== null; };
-				$handler = array_filter($handler, $filter);
+				$handler = compact('type') + $options + $handlers[$type];
 				$handler += $handlers['default'] + $defaults;
 				$handler['paths'] = $self::invokeMethod(
 					'_finalizePaths',
