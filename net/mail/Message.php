@@ -81,7 +81,7 @@ class Message extends \lithium\core\Object {
 	 *
 	 * @var array
 	 */
-	public $types = array('html', 'text');
+	public $types = array('text', 'html');
 
 	/**
 	 * Character set.
