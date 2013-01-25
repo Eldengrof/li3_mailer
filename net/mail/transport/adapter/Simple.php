@@ -30,7 +30,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 	 */
 	protected $_messageAddresses = array(
 		'returnPath' => 'Return-Path', 'sender', 'from',
-		'replyTo' => 'Reply-To', 'to', 'cc', 'bcc'
+		'replyTo' => 'Reply-To', 'cc', 'bcc'
 	);
 
 	/**
