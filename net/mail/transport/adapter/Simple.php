@@ -74,6 +74,7 @@ class Simple extends \li3_mailer\net\mail\Transport {
 		$attachments = $message->attachments();
 		$charset = $message->charset;
 
+		// messages
 		$boundary = uniqid('LI3_MAILER_SIMPLE_');
 		$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
 		$headers['Content-Type'] = $contentType;
@@ -85,15 +86,16 @@ class Simple extends \li3_mailer\net\mail\Transport {
 			$body .= wordwrap($message->body($type), 70) . "\n\n";
 		}
 		$body .= "--{$boundary}--";
+
+		// attachments
 		if ($attachments) {
 			$boundary = uniqid('LI3_MAILER_SIMPLE_');
 			$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
 			$headers['Content-Type'] = $contentType;
-			$contentType .= ";charset=\"{$charset}\"";
 			$wrap = "--{$boundary}\n";
 			$wrap .= $body . "\n";
 			foreach ($attachments as $attachment) {
-				$wrap .= "--{$boundary}\n";
+				$wrap .= "\n--{$boundary}\n";
 				$attachment += array (
 					'path' => null,
 					'data' => false,
@@ -130,9 +132,9 @@ class Simple extends \li3_mailer\net\mail\Transport {
 					$wrap .= "Content-ID: <{$attachment['id']}>\n";
 				}
 				$wrap .= "Content-Transfer-Encoding: base64\n";
-				$wrap .= "\n" . wordwrap(base64_encode($content), 70) . "\n";
+				$wrap .= "\n" . wordwrap(base64_encode($content), 70, "\n", true) . "\n";
 			}
-			$wrap .= "--{$boundary}--";
+			$wrap .= "\n--{$boundary}--";
 			$body = $wrap;
 		}
 		$headers = array_filter($headers);
