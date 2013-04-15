@@ -70,71 +70,8 @@ class Simple extends \li3_mailer\net\mail\Transport {
 		$headers['Date'] = date('r', $message->date);
 		$headers['MIME-Version'] = "1.0";
 
-		$types = $message->types();
-		$attachments = $message->attachments();
-		$charset = $message->charset;
+		$body = $this->_message($message, $headers);
 
-		$boundary = uniqid('LI3_MAILER_SIMPLE_');
-		$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
-		$headers['Content-Type'] = $contentType;
-		$body = $attachments ? "Content-Type: {$contentType}\n\n" : '';
-		foreach ($types as $type => $contentType) {
-			$body .= "--{$boundary}\n";
-			$contentType .= ";charset=\"{$charset}\"";
-			$body .= "Content-Type: {$contentType}\n\n";
-			$body .= wordwrap($message->body($type), 70) . "\n\n";
-		}
-		$body .= "--{$boundary}--";
-		if ($attachments) {
-			$boundary = uniqid('LI3_MAILER_SIMPLE_');
-			$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
-			$headers['Content-Type'] = $contentType;
-			$contentType .= ";charset=\"{$charset}\"";
-			$wrap = "--{$boundary}\n";
-			$wrap .= $body . "\n";
-			foreach ($attachments as $attachment) {
-				$wrap .= "--{$boundary}\n";
-				$attachment += array (
-					'path' => null,
-					'data' => false,
-					'filename' => null,
-					'content-type' => 'text/plain',
-					'disposition' => null,
-					'id' => null,
-				);
-				$content = $attachment['data'];
-				if ($attachment['path']) {
-					$content = file_get_contents($attachment['path']);
-				}
-				if ($content === false) {
-					$error = "Can not attach path `{$attachment['path']}`.";
-					throw new RuntimeException($error);
-				}
-				$filename = $attachment['filename'];
-				if ($attachment['content-type']) {
-					$contentType = $attachment['content-type'];
-					if ($filename && !preg_match('/;\s+name=/', $contentType)) {
-						$contentType .= "; name=\"{$filename}\"";
-					}
-					$wrap .= "Content-Type: {$contentType}\n";
-				}
-				if ($attachment['disposition']) {
-					$disposition = $attachment['disposition'];
-					$pattern = '/;\s+filename=/';
-					if ($filename && !preg_match($pattern, $disposition)) {
-						$disposition .= "; filename=\"{$filename}\"";
-					}
-					$wrap .= "Content-Disposition: {$disposition}\n";
-				}
-				if ($attachment['id']) {
-					$wrap .= "Content-ID: <{$attachment['id']}>\n";
-				}
-				$wrap .= "Content-Transfer-Encoding: base64\n";
-				$wrap .= "\n" . wordwrap(base64_encode($content), 70) . "\n";
-			}
-			$wrap .= "--{$boundary}--";
-			$body = $wrap;
-		}
 		$headers = array_filter($headers);
 		$headers = join ("\r\n",
 			array_map (
@@ -148,6 +85,96 @@ class Simple extends \li3_mailer\net\mail\Transport {
 		$to = $this->_address($message->to);
 		$mail = $this->_dependencies['mail'];
 		return call_user_func($mail, $to, $message->subject, $body, $headers);
+	}
+
+	/**
+	 * Prepare message and attachments for delivery
+	 *
+	 * @param  object $message
+	 * @param  array  $headers
+	 * @return string
+	 */
+	protected function _message($message, &$headers) {
+		$types = $message->types();
+		$attachments = $message->attachments();
+		$charset = $message->charset;
+
+		$boundary = uniqid('LI3_MAILER_SIMPLE_');
+		$contentType = "multipart/alternative;boundary=\"{$boundary}\"";
+		$headers['Content-Type'] = $contentType;
+		$body = $attachments ? "Content-Type: {$contentType}\n\n" : '';
+		foreach ($types as $type => $contentType) {
+			$body .= "--{$boundary}\n";
+			$contentType .= ";charset=\"{$charset}\"";
+			$body .= "Content-Type: {$contentType}\n\n";
+			$body .= wordwrap($message->body($type), 70)."\n\n";
+		}
+		$body .= "--{$boundary}--";
+
+		// attachments
+		if ($attachments) {
+			$body = $this->_attachments($headers, $attachments, $body);
+		}
+		return $body;
+	}
+
+	/**
+	 * Prepare attachments
+	 *
+	 * @param  array  $headers
+	 * @param  array  $attachments
+	 * @param  string $body
+	 * @return string
+	 * @throws \RuntimeException
+	 */
+	protected function _attachments(&$headers, $attachments, $body) {
+		$boundary = uniqid('LI3_MAILER_SIMPLE_');
+		$contentType = "multipart/mixed;boundary=\"{$boundary}\"";
+		$headers['Content-Type'] = $contentType;
+		$wrap = "--{$boundary}\n";
+		$wrap .= $body . "\n";
+		foreach ($attachments as $attachment) {
+			$wrap .= "\n--{$boundary}\n";
+			$attachment += array (
+				'path' => null,
+				'data' => false,
+				'filename' => null,
+				'content-type' => 'text/plain',
+				'disposition' => null,
+				'id' => null,
+			);
+			$content = $attachment['data'];
+			if ($attachment['path']) {
+				$content = file_get_contents($attachment['path']);
+			}
+			if ($content === false) {
+				$error = "Can not attach path `{$attachment['path']}`.";
+				throw new RuntimeException($error);
+			}
+			$filename = $attachment['filename'];
+			if ($attachment['content-type']) {
+				$contentType = $attachment['content-type'];
+				if ($filename && !preg_match('/;\s+name=/', $contentType)) {
+					$contentType .= "; name=\"{$filename}\"";
+				}
+				$wrap .= "Content-Type: {$contentType}\n";
+			}
+			if ($attachment['disposition']) {
+				$disposition = $attachment['disposition'];
+				$pattern = '/;\s+filename=/';
+				if ($filename && !preg_match($pattern, $disposition)) {
+					$disposition .= "; filename=\"{$filename}\"";
+				}
+				$wrap .= "Content-Disposition: {$disposition}\n";
+			}
+			if ($attachment['id']) {
+				$wrap .= "Content-ID: <{$attachment['id']}>\n";
+			}
+			$wrap .= "Content-Transfer-Encoding: base64\n";
+			$wrap .= "\n".wordwrap(base64_encode($content), 70, "\n", true)."\n";
+		}
+		$wrap .= "\n--{$boundary}--";
+		return $wrap;
 	}
 }
 
